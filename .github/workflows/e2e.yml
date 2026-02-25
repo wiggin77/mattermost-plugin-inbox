@@ -1,0 +1,148 @@
+name: e2e
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: mmuser
+          POSTGRES_PASSWORD: mostest
+          POSTGRES_DB: mattermost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ACCESS_KEY: minioaccesskey
+          MINIO_SECRET_KEY: miniosecretkey
+        ports:
+          - 9000:9000
+
+      inbucket:
+        image: inbucket/inbucket:latest
+        ports:
+          - 9001:9000
+          - 2500:2500
+
+    env:
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mostest@localhost:5432/mattermost_test?sslmode=disable
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_FILESETTINGS_DRIVERNAME: amazons3
+      MM_FILESETTINGS_AMAZONS3ACCESSKEYID: minioaccesskey
+      MM_FILESETTINGS_AMAZONS3SECRETACCESSKEY: miniosecretkey
+      MM_FILESETTINGS_AMAZONS3BUCKET: mattermost-test
+      MM_FILESETTINGS_AMAZONS3ENDPOINT: localhost:9000
+      MM_FILESETTINGS_AMAZONS3SSL: "false"
+      MM_EMAILSETTINGS_SMTPSERVER: localhost
+      MM_EMAILSETTINGS_SMTPPORT: "2500"
+      MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_LOCALMODESOCKETLOCATION: /var/tmp/mattermost_local.socket
+      MM_ADMIN_USERNAME: admin
+      MM_ADMIN_PASSWORD: Admin1234!
+      MM_ADMIN_EMAIL: admin@example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js (plugin build)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Build plugin
+        run: make dist
+
+      - name: Download Mattermost server
+        run: |
+          curl -fsSL https://latest.mattermost.com/mattermost-enterprise-linux -o mattermost.tar.gz
+          tar -xzf mattermost.tar.gz
+          rm mattermost.tar.gz
+
+      - name: Create MinIO bucket
+        run: |
+          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
+          chmod +x mc
+          ./mc alias set local http://localhost:9000 minioaccesskey miniosecretkey
+          ./mc mb local/mattermost-test
+          rm mc
+
+      - name: Start Mattermost server
+        run: |
+          cd mattermost
+          ./bin/mattermost &
+          # Wait for server to be ready.
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8065/api/v4/system/ping > /dev/null 2>&1; then
+              echo "Mattermost is ready"
+              break
+            fi
+            echo "Waiting for Mattermost... ($i/30)"
+            sleep 2
+          done
+
+      - name: Create admin user
+        run: |
+          cd mattermost
+          ./bin/mattermost user create \
+            --username "$MM_ADMIN_USERNAME" \
+            --password "$MM_ADMIN_PASSWORD" \
+            --email "$MM_ADMIN_EMAIL" \
+            --system-admin
+
+      - name: Deploy plugin
+        run: |
+          PLUGIN_BUNDLE=$(ls dist/*.tar.gz)
+          cd mattermost
+          ./bin/mmctl --local plugin add "../${PLUGIN_BUNDLE}"
+          ./bin/mmctl --local plugin enable com.mattermost.plugin-inbox
+
+      - name: Setup Node.js (E2E tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: e2e-tests/.nvmrc
+
+      - name: Install E2E dependencies
+        working-directory: e2e-tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: e2e-tests
+        run: npx playwright test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e-tests/playwright-report/
+          retention-days: 14
