@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"reflect"
 	"strconv"
 
@@ -60,6 +61,13 @@ func (c *configuration) IsValid() error {
 	}
 	if c.EncryptionKey == "" {
 		return errors.New("encryption key is required; generate one in System Console")
+	}
+	keyBytes, err := base64.StdEncoding.DecodeString(c.EncryptionKey)
+	if err != nil {
+		return errors.New("encryption key is not valid base64")
+	}
+	if len(keyBytes) != 32 {
+		return errors.Errorf("encryption key must be exactly 32 bytes (got %d); regenerate in System Console", len(keyBytes))
 	}
 	if c.WebhookSecret == "" {
 		return errors.New("webhook secret is required; generate one in System Console")
