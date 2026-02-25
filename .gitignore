@@ -3,6 +3,16 @@ dist/
 webapp/src/manifest.ts
 server/manifest.go
 
+# Dependencies
+node_modules/
+
+# Test output
+server/coverage.txt
+report.xml
+webapp/junit.xml
+e2e-tests/playwright-report/
+e2e-tests/test-results/
+
 # Mac
 .DS_Store
 
@@ -10,4 +20,4 @@ server/manifest.go
 .idea/
 
 # VS Code
-.vscode
+.vscode/
