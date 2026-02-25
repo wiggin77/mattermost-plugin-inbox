@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strconv"
 
 	"github.com/pkg/errors"
 )
@@ -14,16 +15,80 @@ import (
 // configuration can change at any time, access to the configuration must be synchronized. The
 // strategy used in this plugin is to guard a pointer to the configuration, and clone the entire
 // struct whenever it changes. You may replace this with whatever strategy you choose.
-//
-// If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
-// copy appropriate for your types.
-type configuration struct{}
+type configuration struct {
+	// TenantID is the Azure AD tenant ID. Use "common" for multi-tenant apps.
+	TenantID string `json:"TenantID"`
 
-// Clone shallow copies the configuration. Your implementation may require a deep copy if
-// your configuration has reference types.
+	// ClientID is the Azure AD application (client) ID.
+	ClientID string `json:"ClientID"`
+
+	// ClientSecret is the Azure AD client secret.
+	ClientSecret string `json:"ClientSecret"`
+
+	// EncryptionKey is the AES-256 key used to encrypt OAuth tokens at rest.
+	EncryptionKey string `json:"EncryptionKey"`
+
+	// WebhookSecret is the clientState for validating Graph webhook notifications.
+	WebhookSecret string `json:"WebhookSecret"`
+
+	// PollingIntervalMinutes is how often to poll for new emails (0 to disable).
+	PollingIntervalMinutes string `json:"PollingIntervalMinutes"`
+
+	// MaxAttachmentSizeMB is the max attachment size to sync.
+	MaxAttachmentSizeMB string `json:"MaxAttachmentSizeMB"`
+
+	// EnableDiagnostics enables verbose logging.
+	EnableDiagnostics bool `json:"EnableDiagnostics"`
+}
+
+// Clone shallow copies the configuration.
 func (c *configuration) Clone() *configuration {
 	clone := *c
 	return &clone
+}
+
+// IsValid validates that all required configuration fields are set.
+func (c *configuration) IsValid() error {
+	if c.TenantID == "" {
+		return errors.New("Azure tenant ID is required")
+	}
+	if c.ClientID == "" {
+		return errors.New("Azure client ID is required")
+	}
+	if c.ClientSecret == "" {
+		return errors.New("Azure client secret is required")
+	}
+	if c.EncryptionKey == "" {
+		return errors.New("encryption key is required; generate one in System Console")
+	}
+	if c.WebhookSecret == "" {
+		return errors.New("webhook secret is required; generate one in System Console")
+	}
+	return nil
+}
+
+// GetPollingInterval returns the polling interval in minutes, defaulting to 5.
+func (c *configuration) GetPollingInterval() int {
+	if c.PollingIntervalMinutes == "" {
+		return 5
+	}
+	val, err := strconv.Atoi(c.PollingIntervalMinutes)
+	if err != nil || val < 0 {
+		return 5
+	}
+	return val
+}
+
+// GetMaxAttachmentSize returns the max attachment size in bytes.
+func (c *configuration) GetMaxAttachmentSize() int64 {
+	if c.MaxAttachmentSizeMB == "" {
+		return 50 * 1024 * 1024
+	}
+	val, err := strconv.Atoi(c.MaxAttachmentSizeMB)
+	if err != nil || val <= 0 {
+		return 50 * 1024 * 1024
+	}
+	return int64(val) * 1024 * 1024
 }
 
 // getConfiguration retrieves the active configuration under lock, making it safe to use
@@ -54,9 +119,6 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 	defer p.configurationLock.Unlock()
 
 	if configuration != nil && p.configuration == configuration {
-		// Ignore assignment if the configuration struct is empty. Go will optimize the
-		// allocation for same to point at the same memory address, breaking the check
-		// above.
 		if reflect.ValueOf(*configuration).NumField() == 0 {
 			return
 		}
@@ -71,7 +133,6 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 func (p *Plugin) OnConfigurationChange() error {
 	configuration := new(configuration)
 
-	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
 		return errors.Wrap(err, "failed to load plugin configuration")
 	}

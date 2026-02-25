@@ -59,4 +59,4 @@ formatters:
           replacement: any
     goimports:
       local-prefixes:
-        - github.com/mattermost/mattermost-plugin-starter-template
+        - github.com/wiggin77/mattermost-plugin-inbox

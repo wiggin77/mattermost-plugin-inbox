@@ -1,7 +1,7 @@
 # Plugin Starter Template
 
-[![Build Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml)
-[![E2E Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml)
+[![Build Status](https://github.com/wiggin77/mattermost-plugin-inbox/actions/workflows/ci.yml/badge.svg)](https://github.com/wiggin77/mattermost-plugin-inbox/actions/workflows/ci.yml)
+[![E2E Status](https://github.com/wiggin77/mattermost-plugin-inbox/actions/workflows/e2e.yml/badge.svg)](https://github.com/wiggin77/mattermost-plugin-inbox/actions/workflows/e2e.yml)
 
 This plugin serves as a starting point for writing a Mattermost plugin. Feel free to base your own plugin off this repository.
 
@@ -14,7 +14,7 @@ Use GitHub's template feature to make a copy of this repository by clicking the 
 
 Alternatively shallow clone the repository matching your plugin name:
 ```
-git clone --depth 1 https://github.com/mattermost/mattermost-plugin-starter-template com.example.my-plugin
+git clone --depth 1 https://github.com/wiggin77/mattermost-plugin-inbox com.example.my-plugin
 ```
 
 Note that this project uses [Go modules](https://github.com/golang/go/wiki/Modules). Be sure to locate the project outside of `$GOPATH`.
@@ -34,9 +34,9 @@ Edit the following files:
 module github.com/example/my-plugin
 ```
 
-3. Replace all occurrences of `github.com/mattermost/mattermost-plugin-starter-template` in the codebase with your Go module path:
+3. Replace all occurrences of `github.com/wiggin77/mattermost-plugin-inbox` in the codebase with your Go module path:
 ```bash
-sed -i '' 's|github.com/mattermost/mattermost-plugin-starter-template|github.com/example/my-plugin|g' server/*.go
+sed -i '' 's|github.com/wiggin77/mattermost-plugin-inbox|github.com/example/my-plugin|g' server/*.go
 ```
 
 4. Replace `.golangci.yml` `local-prefixes` attribute with your Go module path:

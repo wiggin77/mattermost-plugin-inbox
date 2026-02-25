@@ -1,11 +1,11 @@
 {
-    "id": "com.mattermost.plugin-starter-template",
-    "name": "Plugin Starter Template",
-    "description": "This plugin serves as a starting point for writing a Mattermost plugin.",
-    "homepage_url": "https://github.com/mattermost/mattermost-plugin-starter-template",
-    "support_url": "https://github.com/mattermost/mattermost-plugin-starter-template/issues",
+    "id": "com.mattermost.plugin-inbox",
+    "name": "Mattermost Inbox (Outlook Sync)",
+    "description": "Syncs O365 Outlook emails with Mattermost channels. Users see incoming emails as threaded posts and can reply to emails from within Mattermost.",
+    "homepage_url": "https://github.com/wiggin77/mattermost-plugin-inbox",
+    "support_url": "https://github.com/wiggin77/mattermost-plugin-inbox/issues",
     "icon_path": "assets/starter-template-icon.svg",
-    "min_server_version": "6.2.1",
+    "min_server_version": "9.0.0",
     "server": {
         "executables": {
             "linux-amd64": "server/dist/plugin-linux-amd64",
@@ -19,8 +19,75 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "",
-        "footer": "",
-        "settings": []
+        "header": "Configure the Mattermost Inbox plugin to sync O365 Outlook emails with Mattermost.",
+        "footer": "Register an Azure AD application at https://portal.azure.com with permissions: Mail.Read, Mail.Send, offline_access. Set the redirect URI to {siteURL}/plugins/com.mattermost.plugin-inbox/api/v1/oauth2/complete.",
+        "settings": [
+            {
+                "key": "TenantID",
+                "display_name": "Azure Directory (Tenant) ID",
+                "type": "text",
+                "help_text": "The Azure AD tenant ID. Use 'common' for multi-tenant apps.",
+                "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                "default": ""
+            },
+            {
+                "key": "ClientID",
+                "display_name": "Azure Application (Client) ID",
+                "type": "text",
+                "help_text": "The application (client) ID of the registered Azure AD app.",
+                "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                "default": ""
+            },
+            {
+                "key": "ClientSecret",
+                "display_name": "Client Secret",
+                "type": "text",
+                "help_text": "The client secret generated in the Azure AD app registration.",
+                "placeholder": "",
+                "default": "",
+                "secret": true
+            },
+            {
+                "key": "EncryptionKey",
+                "display_name": "Encryption Key",
+                "type": "generated",
+                "help_text": "Auto-generated AES-256 key used to encrypt OAuth tokens at rest. Regenerating this key will disconnect all users.",
+                "regenerate_help_text": "Regenerating this key will invalidate all stored tokens and disconnect all users.",
+                "default": "",
+                "secret": true
+            },
+            {
+                "key": "WebhookSecret",
+                "display_name": "Webhook Validation Secret",
+                "type": "generated",
+                "help_text": "Secret used as the clientState for Microsoft Graph webhook subscriptions to validate incoming notifications.",
+                "regenerate_help_text": "Regenerating this secret will require re-creating all active subscriptions.",
+                "default": "",
+                "secret": true
+            },
+            {
+                "key": "PollingIntervalMinutes",
+                "display_name": "Polling Interval (minutes)",
+                "type": "text",
+                "help_text": "How often to poll for new emails as a fallback when webhooks are unavailable. Set to 0 to disable polling. Default: 5.",
+                "placeholder": "5",
+                "default": "5"
+            },
+            {
+                "key": "MaxAttachmentSizeMB",
+                "display_name": "Maximum Attachment Size (MB)",
+                "type": "text",
+                "help_text": "Maximum size of email attachments to download and upload to Mattermost. Attachments exceeding this size will show a link only. Default: 50.",
+                "placeholder": "50",
+                "default": "50"
+            },
+            {
+                "key": "EnableDiagnostics",
+                "display_name": "Enable Diagnostics",
+                "type": "bool",
+                "help_text": "When true, additional diagnostic logging is enabled.",
+                "default": false
+            }
+        ]
     }
 }
