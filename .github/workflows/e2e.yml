@@ -30,10 +30,11 @@ jobs:
           --health-retries 5
 
       minio:
-        image: minio/minio:latest
+        image: minio/minio:RELEASE.2024-06-22T05-26-45Z
         env:
           MINIO_ACCESS_KEY: minioaccesskey
           MINIO_SECRET_KEY: miniosecretkey
+          MINIO_SSE_MASTER_KEY: "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574"
         ports:
           - 9000:9000
 
@@ -85,14 +86,6 @@ jobs:
           curl -fsSL https://latest.mattermost.com/mattermost-enterprise-linux -o mattermost.tar.gz
           tar -xzf mattermost.tar.gz
           rm mattermost.tar.gz
-
-      - name: Create MinIO bucket
-        run: |
-          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
-          chmod +x mc
-          ./mc alias set local http://localhost:9000 minioaccesskey miniosecretkey
-          ./mc mb local/mattermost-test
-          rm mc
 
       - name: Start Mattermost server
         run: |
