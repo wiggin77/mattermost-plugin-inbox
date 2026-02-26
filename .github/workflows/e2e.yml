@@ -87,6 +87,13 @@ jobs:
           tar -xzf mattermost.tar.gz
           rm mattermost.tar.gz
 
+      - name: Create MinIO bucket
+        run: |
+          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          mc alias set local http://localhost:9000 minioaccesskey miniosecretkey
+          mc mb local/mattermost-test
+
       - name: Start Mattermost server
         run: |
           cd mattermost
