@@ -21,6 +21,7 @@ jobs:
           POSTGRES_USER: mmuser
           POSTGRES_PASSWORD: mostest
           POSTGRES_DB: mattermost_test
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -35,33 +36,42 @@ jobs:
           MINIO_ACCESS_KEY: minioaccesskey
           MINIO_SECRET_KEY: miniosecretkey
           MINIO_SSE_MASTER_KEY: "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574"
-        ports:
-          - 9000:9000
 
       inbucket:
         image: inbucket/inbucket:latest
         ports:
-          - 9001:9000
-          - 2500:2500
+          - 10080:9000
+          - 10025:2500
+
+      mattermost-server:
+        image: mattermostdevelopment/mattermost-enterprise-edition:master
+        env:
+          DB_HOST: postgres
+          DB_PORT_NUMBER: 5432
+          MM_DBNAME: mattermost_test
+          MM_USERNAME: mmuser
+          MM_PASSWORD: mostest
+          CI_INBUCKET_HOST: inbucket
+          CI_INBUCKET_PORT: 10080
+          CI_MINIO_HOST: minio
+          IS_CI: true
+          MM_SERVICEENVIRONMENT: test
+          MM_CLUSTERSETTINGS_READONLYCONFIG: false
+          MM_EMAILSETTINGS_SMTPSERVER: inbucket
+          MM_EMAILSETTINGS_SMTPPORT: 10025
+          MM_SQLSETTINGS_DATASOURCE: "postgres://mmuser:mostest@postgres:5432/mattermost_test?sslmode=disable&connect_timeout=10"
+          MM_SQLSETTINGS_DRIVERNAME: postgres
+          MM_PLUGINSETTINGS_ENABLEUPLOADS: true
+          MM_PLUGINSETTINGS_AUTOMATICPREPACKAGEDPLUGINS: false
+          MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+        ports:
+          - 8065:8065
 
     env:
-      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mostest@localhost:5432/mattermost_test?sslmode=disable
-      MM_SQLSETTINGS_DRIVERNAME: postgres
-      MM_FILESETTINGS_DRIVERNAME: amazons3
-      MM_FILESETTINGS_AMAZONS3ACCESSKEYID: minioaccesskey
-      MM_FILESETTINGS_AMAZONS3SECRETACCESSKEY: miniosecretkey
-      MM_FILESETTINGS_AMAZONS3BUCKET: mattermost-test
-      MM_FILESETTINGS_AMAZONS3ENDPOINT: localhost:9000
-      MM_FILESETTINGS_AMAZONS3SSL: "false"
-      MM_EMAILSETTINGS_SMTPSERVER: localhost
-      MM_EMAILSETTINGS_SMTPPORT: "2500"
-      MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
       MM_SERVICESETTINGS_SITEURL: http://localhost:8065
-      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
-      MM_SERVICESETTINGS_LOCALMODESOCKETLOCATION: /var/tmp/mattermost_local.socket
-      MM_ADMIN_USERNAME: admin
-      MM_ADMIN_PASSWORD: Admin1234!
-      MM_ADMIN_EMAIL: admin@example.com
+      MM_ADMIN_USERNAME: sysadmin
+      MM_ADMIN_PASSWORD: Sys@dmin-sample1
+      MM_ADMIN_EMAIL: sysadmin@sample.mattermost.com
 
     steps:
       - name: Checkout
@@ -78,27 +88,9 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Build plugin
-        run: make dist
-
-      - name: Download Mattermost server
+      - name: Create admin user
         run: |
-          curl -fsSL https://latest.mattermost.com/mattermost-enterprise-linux -o mattermost.tar.gz
-          tar -xzf mattermost.tar.gz
-          rm mattermost.tar.gz
-
-      - name: Create MinIO bucket
-        run: |
-          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
-          chmod +x /usr/local/bin/mc
-          mc alias set local http://localhost:9000 minioaccesskey miniosecretkey
-          mc mb local/mattermost-test
-
-      - name: Start Mattermost server
-        run: |
-          cd mattermost
-          ./bin/mattermost &
-          # Wait for server to be ready.
+          # Wait for Mattermost to be ready.
           for i in $(seq 1 30); do
             if curl -fs http://localhost:8065/api/v4/system/ping > /dev/null 2>&1; then
               echo "Mattermost is ready"
@@ -107,22 +99,23 @@ jobs:
             echo "Waiting for Mattermost... ($i/30)"
             sleep 2
           done
+          # Create admin user via API.
+          STATUSCODE=$(curl -X POST -H "Content-Type: application/json" \
+            -d '{"email": "'"${MM_ADMIN_EMAIL}"'", "username": "'"${MM_ADMIN_USERNAME}"'", "password": "'"${MM_ADMIN_PASSWORD}"'"}' \
+            ${MM_SERVICESETTINGS_SITEURL}/api/v4/users -w "%{http_code}" -o /dev/stderr)
+          if test $STATUSCODE -ne 201; then exit 1; fi
 
-      - name: Create admin user
+      - name: Build and deploy plugin
+        env:
+          MM_ADMIN_TOKEN: ""
         run: |
-          cd mattermost
-          ./bin/mmctl --local user create \
-            --username "$MM_ADMIN_USERNAME" \
-            --password "$MM_ADMIN_PASSWORD" \
-            --email "$MM_ADMIN_EMAIL" \
-            --system-admin
-
-      - name: Deploy plugin
-        run: |
-          PLUGIN_BUNDLE=$(ls dist/*.tar.gz)
-          cd mattermost
-          ./bin/mmctl --local plugin add "../${PLUGIN_BUNDLE}"
-          ./bin/mmctl --local plugin enable com.mattermost.plugin-inbox
+          # Log in and get a token.
+          MM_ADMIN_TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+            -d '{"login_id": "'"${MM_ADMIN_USERNAME}"'", "password": "'"${MM_ADMIN_PASSWORD}"'"}' \
+            ${MM_SERVICESETTINGS_SITEURL}/api/v4/users/login -i 2>/dev/null \
+            | grep -i '^token:' | awk '{print $2}' | tr -d '\r')
+          export MM_ADMIN_TOKEN
+          make deploy
 
       - name: Setup Node.js (E2E tests)
         uses: actions/setup-node@v4

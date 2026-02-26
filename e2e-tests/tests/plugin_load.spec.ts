@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test';
 
-const adminUsername = process.env.MM_ADMIN_USERNAME || 'admin';
-const adminPassword = process.env.MM_ADMIN_PASSWORD || 'Admin1234!';
+const adminUsername = process.env.MM_ADMIN_USERNAME || 'sysadmin';
+const adminPassword = process.env.MM_ADMIN_PASSWORD || 'Sys@dmin-sample1';
 
 test.describe('Plugin load', () => {
     test.beforeEach(async ({page}) => {
