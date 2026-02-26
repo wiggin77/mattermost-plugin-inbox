@@ -104,7 +104,7 @@ jobs:
       - name: Create admin user
         run: |
           cd mattermost
-          ./bin/mattermost user create \
+          ./bin/mmctl --local user create \
             --username "$MM_ADMIN_USERNAME" \
             --password "$MM_ADMIN_PASSWORD" \
             --email "$MM_ADMIN_EMAIL" \
