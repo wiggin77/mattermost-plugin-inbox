@@ -1,23 +1,45 @@
-import {defineConfig, devices} from '@playwright/test';
-
-const baseURL = process.env.MM_SERVICESETTINGS_SITEURL || 'http://localhost:8065';
+import {defineConfig} from '@playwright/test';
+import {duration, testConfig} from '@mattermost/playwright-lib';
 
 export default defineConfig({
-    testDir: './tests',
-    fullyParallel: false,
-    forbidOnly: !!process.env.CI,
-    retries: process.env.CI ? 1 : 0,
-    workers: 1,
-    reporter: process.env.CI ? 'html' : 'list',
+    globalSetup: './global_setup.ts',
+    forbidOnly: testConfig.isCI,
+    outputDir: 'test-results',
+    retries: testConfig.isCI ? 2 : 0,
+    testDir: 'specs',
+    timeout: duration.one_min,
+    workers: testConfig.workers,
+    expect: {
+        timeout: duration.ten_sec,
+    },
     use: {
-        baseURL,
-        trace: 'on-first-retry',
+        baseURL: testConfig.baseURL,
+        ignoreHTTPSErrors: true,
+        headless: testConfig.headless,
+        locale: 'en-US',
+        launchOptions: {
+            slowMo: testConfig.slowMo,
+        },
         screenshot: 'only-on-failure',
+        trace: 'off',
+        video: 'retain-on-failure',
+        actionTimeout: duration.half_min,
     },
     projects: [
+        {name: 'setup', testMatch: /test\.setup\.ts/},
         {
-            name: 'chromium',
-            use: {...devices['Desktop Chrome']},
+            name: 'chrome',
+            use: {
+                browserName: 'chromium',
+                permissions: ['notifications'],
+                viewport: {width: 1280, height: 1024},
+            },
+            dependencies: ['setup'],
         },
+    ],
+    reporter: [
+        ['html', {open: 'never', outputFolder: './results/reporter'}],
+        ['json', {outputFile: './results/reporter/results.json'}],
+        ['list'],
     ],
 });

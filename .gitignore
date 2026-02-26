@@ -10,7 +10,7 @@ node_modules/
 server/coverage.txt
 report.xml
 webapp/junit.xml
-e2e-tests/playwright-report/
+e2e-tests/results/
 e2e-tests/test-results/
 
 # Mac

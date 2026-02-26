@@ -83,7 +83,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Setup Node.js (plugin build)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -106,10 +106,7 @@ jobs:
           if test $STATUSCODE -ne 201; then exit 1; fi
 
       - name: Build and deploy plugin
-        env:
-          MM_ADMIN_TOKEN: ""
         run: |
-          # Log in and get a token.
           MM_ADMIN_TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
             -d '{"login_id": "'"${MM_ADMIN_USERNAME}"'", "password": "'"${MM_ADMIN_PASSWORD}"'"}' \
             ${MM_SERVICESETTINGS_SITEURL}/api/v4/users/login -i 2>/dev/null \
@@ -117,25 +114,22 @@ jobs:
           export MM_ADMIN_TOKEN
           make deploy
 
-      - name: Setup Node.js (E2E tests)
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: e2e-tests/.nvmrc
-
       - name: Install E2E dependencies
         working-directory: e2e-tests
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
 
       - name: Run E2E tests
         working-directory: e2e-tests
-        run: npx playwright test
+        run: npm run test-ci
+        env:
+          PW_BASE_URL: ${{ env.MM_SERVICESETTINGS_SITEURL }}
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: e2e-tests/playwright-report/
+          path: |
+            e2e-tests/results
+            e2e-tests/test-results
           retention-days: 14
