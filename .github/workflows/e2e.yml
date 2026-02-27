@@ -114,6 +114,22 @@ jobs:
           export MM_ADMIN_TOKEN
           make deploy
 
+      - name: Verify plugin status
+        run: |
+          MM_ADMIN_TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+            -d '{"login_id": "'"${MM_ADMIN_USERNAME}"'", "password": "'"${MM_ADMIN_PASSWORD}"'"}' \
+            ${MM_SERVICESETTINGS_SITEURL}/api/v4/users/login -i 2>/dev/null \
+            | grep -i '^token:' | awk '{print $2}' | tr -d '\r')
+          echo "=== All plugins ==="
+          curl -s -H "Authorization: Bearer $MM_ADMIN_TOKEN" \
+            ${MM_SERVICESETTINGS_SITEURL}/api/v4/plugins | python3 -m json.tool
+          echo "=== Plugin statuses ==="
+          curl -s -H "Authorization: Bearer $MM_ADMIN_TOKEN" \
+            ${MM_SERVICESETTINGS_SITEURL}/api/v4/plugins/statuses | python3 -m json.tool
+          echo "=== Server logs (last 50 lines) ==="
+          curl -s -H "Authorization: Bearer $MM_ADMIN_TOKEN" \
+            "${MM_SERVICESETTINGS_SITEURL}/api/v4/logs?per_page=50" | python3 -m json.tool
+
       - name: Install E2E dependencies
         working-directory: e2e-tests
         run: npm install
