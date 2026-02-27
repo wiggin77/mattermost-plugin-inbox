@@ -1,6 +1,6 @@
 import {expect, test} from '@mattermost/playwright-lib';
 
-import {inboxPluginId} from '@/support/constant';
+import {inboxPluginId} from '../support/constant';
 
 test('plugin is installed and running', async ({pw}) => {
     const {adminClient} = await pw.initSetup();
@@ -24,6 +24,6 @@ test('/inbox help returns usage information', async ({pw}) => {
     await messageInput.press('Enter');
 
     // The help response should appear as an ephemeral post.
-    await expect(page.getByText('Mattermost Inbox - Outlook Email Sync')).toBeVisible({timeout: 10000});
-    await expect(page.getByText('/inbox connect')).toBeVisible();
+    await page.getByText('Mattermost Inbox - Outlook Email Sync').waitFor({timeout: 10000});
+    await page.getByText('/inbox connect').waitFor();
 });

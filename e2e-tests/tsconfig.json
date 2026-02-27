@@ -1,14 +1,18 @@
 {
     "compilerOptions": {
-        "esModuleInterop": true,
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "target": "es2022",
         "strict": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
         "strictNullChecks": true,
         "skipLibCheck": true,
         "noEmit": true,
-        "baseUrl": ".",
-        "paths": {
-            "@/support/*": ["support/*"]
-        }
+        "baseUrl": "."
     },
-    "include": ["./**/*"]
+    "include": ["./**/*"],
+    "exclude": ["node_modules"]
 }

@@ -1,5 +1,5 @@
 {
-    "name": "plugin-e2e-tests",
+    "name": "mattermost-plugin-inbox-e2e",
     "private": true,
     "scripts": {
         "test": "cross-env playwright test",
@@ -8,13 +8,14 @@
         "check": "npm run tsc",
         "postinstall": "script/post_install.sh"
     },
-    "devDependencies": {
-        "@types/node": "22.14.0",
-        "cross-env": "7.0.3",
-        "typescript": "5.8.3"
-    },
     "dependencies": {
-        "@mattermost/client": "10.6.0",
-        "@mattermost/playwright-lib": "10.7.0"
+        "@mattermost/client": "11.3.0",
+        "@mattermost/playwright-lib": "11.4.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "1.58.1",
+        "@types/node": "22.14.0",
+        "cross-env": "10.1.0",
+        "typescript": "5.9.3"
     }
 }
