@@ -13,11 +13,11 @@ test('plugin is installed and active', async ({pw}) => {
     expect(resp).toBeDefined();
 });
 
-test('/inbox help slash command is registered', async ({pw}) => {
-    const {adminClient} = await pw.initSetup();
+test('/inbox slash command is registered', async ({pw}) => {
+    const {adminClient, team} = await pw.initSetup();
 
     // Verify the /inbox command is registered via the API.
-    const commands = await adminClient.getAutocompleteCommandsList('');
+    const commands = await adminClient.getAutocompleteCommandsList(team.id);
     const inboxCommand = commands.find((c: {trigger: string}) => c.trigger === 'inbox');
     expect(inboxCommand).toBeDefined();
     expect(inboxCommand!.auto_complete_desc).toContain('Outlook');
