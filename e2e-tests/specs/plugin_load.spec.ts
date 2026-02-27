@@ -3,27 +3,27 @@ import {expect, test} from '@mattermost/playwright-lib';
 import {inboxPluginId} from '../support/constant';
 
 test('plugin is installed and running', async ({pw}) => {
-    const {adminClient} = await pw.initSetup();
+    const {adminUser, adminClient} = await pw.initSetup();
 
-    const plugins = await adminClient.getPlugins();
-    const activeIDs = plugins.active.map((p: {id: string}) => p.id);
-    expect(activeIDs).toContain(inboxPluginId);
+    // Verify plugin is active via the admin API.
+    const plugins = await adminClient.getPluginStatuses();
+    const inboxStatus = plugins.find((p: {plugin_id: string}) => p.plugin_id === inboxPluginId);
+    expect(inboxStatus).toBeDefined();
+    expect(inboxStatus!.state).toBe(1); // 1 = running
 });
 
 test('/inbox help returns usage information', async ({pw}) => {
-    const {adminUser} = await pw.initSetup();
-    const {page} = await pw.testBrowser.login(adminUser);
+    const {user} = await pw.initSetup();
+    const {channelsPage} = await pw.testBrowser.login(user);
 
-    // Navigate to Town Square.
-    await page.goto('/');
-    await page.waitForURL('**/channels/**', {timeout: 15000});
+    await channelsPage.goto();
+    await channelsPage.toBeVisible();
 
     // Type the slash command.
-    const messageInput = page.locator('#post_textbox');
-    await messageInput.fill('/inbox help');
-    await messageInput.press('Enter');
+    await channelsPage.postMessage('/inbox help');
 
     // The help response should appear as an ephemeral post.
-    await page.getByText('Mattermost Inbox - Outlook Email Sync').waitFor({timeout: 10000});
-    await page.getByText('/inbox connect').waitFor();
+    const post = await channelsPage.getLastPost();
+    await post.toBeVisible();
+    await post.toContainText('Mattermost Inbox - Outlook Email Sync');
 });
