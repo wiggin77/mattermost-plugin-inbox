@@ -67,6 +67,14 @@ func (kv Client) GetMessageMapping(outlookMessageID string) (*MessageMapping, er
 	return &mapping, nil
 }
 
+func (kv Client) DeleteMessageMapping(outlookMessageID string) error {
+	key := kvPrefixMessage + hashKey(outlookMessageID)
+	if err := kv.client.KV.Delete(key); err != nil {
+		return errors.Wrap(err, "failed to delete message mapping")
+	}
+	return nil
+}
+
 func (kv Client) StorePostMapping(mapping *PostMapping) error {
 	key := kvPrefixPost + mapping.MattermostPostID
 	_, err := kv.client.KV.Set(key, mapping)
@@ -87,6 +95,14 @@ func (kv Client) GetPostMapping(postID string) (*PostMapping, error) {
 		return nil, nil
 	}
 	return &mapping, nil
+}
+
+func (kv Client) DeletePostMapping(postID string) error {
+	key := kvPrefixPost + postID
+	if err := kv.client.KV.Delete(key); err != nil {
+		return errors.Wrap(err, "failed to delete post mapping")
+	}
+	return nil
 }
 
 func (kv Client) MarkMessageAsSent(outlookMessageID string) error {

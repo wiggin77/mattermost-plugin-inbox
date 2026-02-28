@@ -23,10 +23,12 @@ type KVStore interface {
 	// Message mapping (individual email → MM post, dedup)
 	StoreMessageMapping(mapping *MessageMapping) error
 	GetMessageMapping(outlookMessageID string) (*MessageMapping, error)
+	DeleteMessageMapping(outlookMessageID string) error
 
 	// Post mapping (reverse lookup: MM post → email)
 	StorePostMapping(mapping *PostMapping) error
 	GetPostMapping(postID string) (*PostMapping, error)
+	DeletePostMapping(postID string) error
 
 	// Sent message tracking (reply loop prevention)
 	MarkMessageAsSent(outlookMessageID string) error

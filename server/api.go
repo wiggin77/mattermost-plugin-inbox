@@ -12,6 +12,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/pkg/errors"
 
+	"github.com/wiggin77/mattermost-plugin-inbox/server/email"
 	"github.com/wiggin77/mattermost-plugin-inbox/server/msgraph"
 	"github.com/wiggin77/mattermost-plugin-inbox/server/store/kvstore"
 	syncpkg "github.com/wiggin77/mattermost-plugin-inbox/server/sync"
@@ -368,21 +369,11 @@ func (p *Plugin) postBotMessage(channelID, message string) {
 	}
 }
 
-// processChangeNotification handles a single Graph webhook change notification.
-func (p *Plugin) processChangeNotification(notification msgraph.ChangeNotification) error {
-	if notification.ChangeType != "created" {
-		return nil // Only process new messages.
-	}
-
-	messageID := notification.ResourceData.ID
-	if messageID == "" {
-		return errors.New("notification missing resource data ID")
-	}
-
-	// Find the user associated with this subscription.
+// findUserBySubscription looks up the connected user for a given Graph subscription ID.
+func (p *Plugin) findUserBySubscription(subscriptionID string) (*kvstore.UserConnection, error) {
 	users, err := p.store.GetConnectedUsers()
 	if err != nil {
-		return errors.Wrap(err, "failed to get connected users")
+		return nil, errors.Wrap(err, "failed to get connected users")
 	}
 
 	for _, userID := range users {
@@ -390,35 +381,146 @@ func (p *Plugin) processChangeNotification(notification msgraph.ChangeNotificati
 		if err != nil || conn == nil {
 			continue
 		}
-		if conn.SubscriptionID != notification.SubscriptionID {
-			continue
+		if conn.SubscriptionID == subscriptionID {
+			return conn, nil
 		}
+	}
+	return nil, nil
+}
 
-		// Found the user. Fetch the full message and process it.
-		graphClient, err := p.getGraphClientForUser(conn)
-		if err != nil {
-			return errors.Wrap(err, "failed to create Graph client")
-		}
+// processChangeNotification handles a single Graph webhook change notification.
+func (p *Plugin) processChangeNotification(notification msgraph.ChangeNotification) error {
+	messageID := notification.ResourceData.ID
+	if messageID == "" {
+		return errors.New("notification missing resource data ID")
+	}
 
-		msg, err := graphClient.GetMessage(context.Background(), messageID)
-		if err != nil {
-			return errors.Wrapf(err, "failed to get message %s", messageID)
-		}
-
-		if err := p.syncEngine.ProcessMessage(context.Background(), graphClient, conn, msg); err != nil {
-			return errors.Wrap(err, "failed to process message")
-		}
-
-		// Update last sync timestamp.
-		conn.LastSyncTimestamp = msg.ReceivedDateTime.Unix()
-		if err := p.store.StoreUserConnection(userID, conn); err != nil {
-			p.API.LogError("Failed to update last sync timestamp", "error", err)
-		}
-
+	conn, err := p.findUserBySubscription(notification.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	if conn == nil {
+		p.API.LogWarn("No user found for subscription", "subscription_id", notification.SubscriptionID)
 		return nil
 	}
 
-	p.API.LogWarn("No user found for subscription", "subscription_id", notification.SubscriptionID)
+	switch notification.ChangeType {
+	case "created":
+		return p.processCreateNotification(messageID, conn)
+	case "updated":
+		return p.processUpdateNotification(messageID, conn)
+	case "deleted":
+		return p.processDeleteNotification(messageID, conn)
+	default:
+		return nil
+	}
+}
+
+// processCreateNotification handles a new email notification.
+func (p *Plugin) processCreateNotification(messageID string, conn *kvstore.UserConnection) error {
+	graphClient, err := p.getGraphClientForUser(conn)
+	if err != nil {
+		return errors.Wrap(err, "failed to create Graph client")
+	}
+
+	msg, err := graphClient.GetMessage(context.Background(), messageID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get message %s", messageID)
+	}
+
+	if err := p.syncEngine.ProcessMessage(context.Background(), graphClient, conn, msg); err != nil {
+		return errors.Wrap(err, "failed to process message")
+	}
+
+	conn.LastSyncTimestamp = msg.ReceivedDateTime.Unix()
+	if err := p.store.StoreUserConnection(conn.MattermostUserID, conn); err != nil {
+		p.API.LogError("Failed to update last sync timestamp", "error", err)
+	}
+
+	return nil
+}
+
+// processUpdateNotification handles an updated email notification.
+func (p *Plugin) processUpdateNotification(messageID string, conn *kvstore.UserConnection) error {
+	mapping, err := p.store.GetMessageMapping(messageID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get message mapping")
+	}
+	if mapping == nil {
+		return nil // Never synced — nothing to update.
+	}
+
+	graphClient, err := p.getGraphClientForUser(conn)
+	if err != nil {
+		return errors.Wrap(err, "failed to create Graph client")
+	}
+
+	msg, err := graphClient.GetMessage(context.Background(), messageID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get updated message %s", messageID)
+	}
+
+	// Look up the post mapping to determine if this is a root or reply post.
+	postMapping, err := p.store.GetPostMapping(mapping.MattermostPostID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get post mapping")
+	}
+	if postMapping == nil {
+		return nil
+	}
+
+	// Re-render the post content.
+	var postBody string
+	if postMapping.IsRootPost {
+		postBody = email.RenderRootPost(msg)
+	} else {
+		postBody = email.RenderReplyPost(msg)
+	}
+
+	// Get the existing post and update it.
+	existingPost, err := p.client.Post.GetPost(mapping.MattermostPostID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get post %s", mapping.MattermostPostID)
+	}
+
+	existingPost.Message = postBody
+	existingPost.AddProp("outlook_message_id", msg.ID)
+	existingPost.AddProp("outlook_conversation_id", msg.ConversationID)
+
+	if err := p.client.Post.UpdatePost(existingPost); err != nil {
+		return errors.Wrap(err, "failed to update post")
+	}
+
+	return nil
+}
+
+// processDeleteNotification handles a deleted email notification.
+func (p *Plugin) processDeleteNotification(messageID string, conn *kvstore.UserConnection) error {
+	mapping, err := p.store.GetMessageMapping(messageID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get message mapping")
+	}
+	if mapping == nil {
+		return nil // Never synced or already cleaned up.
+	}
+
+	// Delete the Mattermost post.
+	if err := p.client.Post.DeletePost(mapping.MattermostPostID); err != nil {
+		p.API.LogError("Failed to delete post for deleted email",
+			"error", err,
+			"post_id", mapping.MattermostPostID,
+			"outlook_message_id", messageID,
+		)
+	}
+
+	// Clean up KVStore mappings.
+	if err := p.store.DeletePostMapping(mapping.MattermostPostID); err != nil {
+		p.API.LogError("Failed to delete post mapping", "error", err)
+	}
+	if err := p.store.DeleteMessageMapping(messageID); err != nil {
+		p.API.LogError("Failed to delete message mapping", "error", err)
+	}
+
 	return nil
 }
 

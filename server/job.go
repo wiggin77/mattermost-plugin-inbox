@@ -108,7 +108,7 @@ func (p *Plugin) createSubscriptionForUser(ctx context.Context, graphClient *msg
 	expiry := time.Now().Add(6 * 24 * time.Hour)
 
 	sub, err := graphClient.CreateSubscription(ctx, &msgraph.Subscription{
-		ChangeType:         "created",
+		ChangeType:         "created,updated,deleted",
 		NotificationURL:    notificationURL,
 		Resource:           "me/mailFolders('Inbox')/messages",
 		ExpirationDateTime: expiry,
