@@ -91,6 +91,8 @@ func (e *Engine) createRootPost(conn *kvstore.UserConnection, msg *msgraph.Messa
 		Message:   postBody,
 		FileIds:   fileIDs,
 	}
+	post.AddProp("outlook_message_id", msg.ID)
+	post.AddProp("outlook_conversation_id", msg.ConversationID)
 
 	if err := e.client.Post.CreatePost(post); err != nil {
 		return errors.Wrap(err, "failed to create root post")
@@ -123,6 +125,8 @@ func (e *Engine) createReplyPost(conn *kvstore.UserConnection, convMapping *kvst
 		Message:   postBody,
 		FileIds:   fileIDs,
 	}
+	post.AddProp("outlook_message_id", msg.ID)
+	post.AddProp("outlook_conversation_id", msg.ConversationID)
 
 	if err := e.client.Post.CreatePost(post); err != nil {
 		return errors.Wrap(err, "failed to create reply post")
