@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/pkg/errors"
@@ -22,6 +23,7 @@ const (
 type Client struct {
 	httpClient  *http.Client
 	tokenSource oauth2.TokenSource
+	baseURL     string
 }
 
 // NewClient creates a new Graph API client using the provided token source.
@@ -29,6 +31,16 @@ func NewClient(tokenSource oauth2.TokenSource) *Client {
 	return &Client{
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 		tokenSource: tokenSource,
+		baseURL:     graphBaseURL,
+	}
+}
+
+// NewClientWithBaseURL creates a Graph API client pointed at a custom base URL (for testing).
+func NewClientWithBaseURL(tokenSource oauth2.TokenSource, baseURL string) *Client {
+	return &Client{
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		tokenSource: tokenSource,
+		baseURL:     baseURL,
 	}
 }
 
@@ -44,10 +56,17 @@ func (c *Client) GetMe(ctx context.Context) (*User, error) {
 // ListInboxMessages fetches inbox messages newer than the given timestamp.
 func (c *Client) ListInboxMessages(ctx context.Context, since time.Time, top int) (*MessagesResponse, error) {
 	filter := fmt.Sprintf("receivedDateTime ge %s", since.UTC().Format(time.RFC3339))
-	url := fmt.Sprintf("/me/mailFolders('Inbox')/messages?$filter=%s&$orderby=receivedDateTime asc&$top=%d&$select=id,conversationId,subject,bodyPreview,body,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,isRead", filter, top)
+
+	params := url.Values{}
+	params.Set("$filter", filter)
+	params.Set("$orderby", "receivedDateTime asc")
+	params.Set("$top", fmt.Sprintf("%d", top))
+	params.Set("$select", "id,conversationId,subject,bodyPreview,body,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,isRead")
+
+	path := "/me/mailFolders('Inbox')/messages?" + params.Encode()
 
 	var resp MessagesResponse
-	if err := c.get(ctx, url, &resp); err != nil {
+	if err := c.get(ctx, path, &resp); err != nil {
 		return nil, errors.Wrap(err, "failed to list inbox messages")
 	}
 	return &resp, nil
@@ -140,7 +159,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, resu
 			bodyReader = bytes.NewReader(jsonBytes)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, graphBaseURL+path, bodyReader)
+		req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
 		if err != nil {
 			return errors.Wrap(err, "failed to create request")
 		}
