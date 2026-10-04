@@ -113,9 +113,7 @@ func TestGraphWebhookValidation(t *testing.T) {
 	// Microsoft Graph sends a validation request with a validationToken query parameter.
 	// The plugin must echo it back with 200 OK.
 	validationToken := "test-validation-token-12345"
-	url := pluginURL(th, "/api/v1/webhook/graph") + "?validationToken=" + validationToken
-
-	resp, err := http.Post(url, "application/json", nil)
+	resp, err := http.Post(pluginURL(th, "/api/v1/webhook/graph")+"?validationToken="+validationToken, "application/json", nil)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
